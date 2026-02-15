@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 import java.security.SecureRandom;
 import java.util.Optional;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Controller
 public class HomeController {
@@ -49,32 +50,35 @@ public class HomeController {
         return "admin";
     }
 
-    // Shorten URL API
     @PostMapping("/shorten")
-    @ResponseBody
-    public String shortenUrl(@RequestParam String url,
-                             HttpServletRequest request) {
+@ResponseBody
+public String shortenUrl(@RequestParam String url,
+                         HttpServletRequest request) {
 
-        Optional<Url> existing = urlRepository.findByOriginalUrl(url);
+    Optional<Url> existing = urlRepository.findByOriginalUrl(url);
 
-        String baseUrl = request.getRequestURL().toString()
-                .replace(request.getRequestURI(), "");
+    String baseUrl = request.getScheme() + "://" +
+            request.getServerName() +
+            ((request.getServerPort() == 80 || request.getServerPort() == 443)
+                    ? ""
+                    : ":" + request.getServerPort());
 
-        if (existing.isPresent()) {
-            return baseUrl + "/" + existing.get().getShortCode();
-        }
-
-        String shortCode = generateShortCode();
-
-        Url newUrl = new Url();
-        newUrl.setOriginalUrl(url);
-        newUrl.setShortCode(shortCode);
-        newUrl.setClickCount(0);
-
-        urlRepository.save(newUrl);
-
-        return baseUrl + "/" + shortCode;
+    if (existing.isPresent()) {
+        return baseUrl + "/" + existing.get().getShortCode();
     }
+
+    String shortCode = generateShortCode();
+
+    Url newUrl = new Url();
+    newUrl.setOriginalUrl(url);
+    newUrl.setShortCode(shortCode);
+    newUrl.setClickCount(0);
+
+    urlRepository.save(newUrl);
+
+    return baseUrl + "/" + shortCode;
+}
+
 
     // Redirect
     @GetMapping("/{shortCode}")

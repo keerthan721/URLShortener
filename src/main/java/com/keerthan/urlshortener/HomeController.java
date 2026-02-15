@@ -1,8 +1,11 @@
 package com.keerthan.urlshortener;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -15,7 +18,8 @@ public class HomeController {
     @Autowired
     private UrlRepository urlRepository;
 
-    private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String CHARACTERS =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int SHORT_CODE_LENGTH = 6;
     private static final SecureRandom random = new SecureRandom();
 
@@ -24,39 +28,40 @@ public class HomeController {
     public String home() {
         return "index";
     }
+
     // Admin Dashboard
-@GetMapping("/admin")
-public String adminDashboard(org.springframework.ui.Model model) {
+    @GetMapping("/admin")
+    public String adminDashboard(Model model) {
 
-    var urls = urlRepository.findAll(
-            org.springframework.data.domain.Sort.by(
-                    org.springframework.data.domain.Sort.Direction.DESC,
-                    "clickCount"
-            )
-    );
+        var urls = urlRepository.findAll(
+                Sort.by(Sort.Direction.DESC, "clickCount")
+        );
 
-    model.addAttribute("urls", urls);
-    model.addAttribute("totalLinks", urls.size());
+        model.addAttribute("urls", urls);
+        model.addAttribute("totalLinks", urls.size());
 
-    int totalClicks = urls.stream()
-            .mapToInt(Url::getClickCount)
-            .sum();
+        int totalClicks = urls.stream()
+                .mapToInt(Url::getClickCount)
+                .sum();
 
-    model.addAttribute("totalClicks", totalClicks);
+        model.addAttribute("totalClicks", totalClicks);
 
-    return "admin";
-}
-
+        return "admin";
+    }
 
     // Shorten URL API
     @PostMapping("/shorten")
     @ResponseBody
-    public String shortenUrl(@RequestParam String url) {
+    public String shortenUrl(@RequestParam String url,
+                             HttpServletRequest request) {
 
-        // Check if already exists
         Optional<Url> existing = urlRepository.findByOriginalUrl(url);
+
+        String baseUrl = request.getRequestURL().toString()
+                .replace(request.getRequestURI(), "");
+
         if (existing.isPresent()) {
-            return "http://localhost:8080/" + existing.get().getShortCode();
+            return baseUrl + "/" + existing.get().getShortCode();
         }
 
         String shortCode = generateShortCode();
@@ -64,19 +69,22 @@ public String adminDashboard(org.springframework.ui.Model model) {
         Url newUrl = new Url();
         newUrl.setOriginalUrl(url);
         newUrl.setShortCode(shortCode);
+        newUrl.setClickCount(0);
 
         urlRepository.save(newUrl);
 
-        return "http://localhost:8080/" + shortCode;
+        return baseUrl + "/" + shortCode;
     }
 
     // Redirect
     @GetMapping("/{shortCode}")
     public ResponseEntity<?> redirect(@PathVariable String shortCode) {
 
-        Optional<Url> urlOptional = urlRepository.findByShortCode(shortCode);
+        Optional<Url> urlOptional =
+                urlRepository.findByShortCode(shortCode);
 
         if (urlOptional.isPresent()) {
+
             Url url = urlOptional.get();
 
             url.setClickCount(url.getClickCount() + 1);
@@ -93,10 +101,17 @@ public String adminDashboard(org.springframework.ui.Model model) {
 
     // Short code generator
     private String generateShortCode() {
+
         StringBuilder sb = new StringBuilder();
+
         for (int i = 0; i < SHORT_CODE_LENGTH; i++) {
-            sb.append(CHARACTERS.charAt(random.nextInt(CHARACTERS.length())));
+            sb.append(
+                CHARACTERS.charAt(
+                    random.nextInt(CHARACTERS.length())
+                )
+            );
         }
+
         return sb.toString();
     }
 }
